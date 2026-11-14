@@ -4,10 +4,11 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Denny Yang
 -/
 
--- Ok why is there such specific warnings for copyright
 module
 
 public import Mathlib.Combinatorics.SimpleGraph.Connectivity.EdgeConnectivity
+public import Mathlib.Combinatorics.SimpleGraph.Connectivity.Subgraph
+public import Mathlib.Combinatorics.SimpleGraph.Paths
 
 /-!
 
@@ -25,11 +26,9 @@ def AllWalks {V : Type u} (G : SimpleGraph V) : Type _ :=
 
 def generalizeWalk {u v} (w : G.Walk u v) : AllWalks G := ⟨u,v,w⟩
 
-def specifyWalk (w : AllWalks G) : G.Walk w.1 w.2.1 := w.2.2
+def specifyWalk {G : SimpleGraph V} (w : AllWalks G) : G.Walk w.1 w.2.1 := w.2.2
 
---TODO, its probably a missing import get Walk.toSubgraph
-def WalkToSubgraph {G : SimpleGraph V} (w : AllWalks G) : G.Subgraph := sorry
-
+def WalkToSubgraph {G : SimpleGraph V} (w : AllWalks G) : G.Subgraph := (specifyWalk w).toSubgraph
 
 def isEar {u v} (w: G.Walk u v) : Prop := w.IsTrail
 
@@ -45,6 +44,11 @@ def isEarOf {u v} (w : G.Walk u v) (H : G.Subgraph) : Prop :=
 def isEarOf' {u v} {G : SimpleGraph V} (w : G.Walk u v) (n : ℕ) (ears : ℕ → AllWalks G) : Prop :=
   isEarOf G w (⨆ i<n, WalkToSubgraph (ears i))
 
-structure SimpleGraph.partialEarDecomp where
+-- We enforce that the ear decomposition starts with a cycle
+structure SimpleGraph.partialEarDecomp (G : SimpleGraph V) where
   ears : ℕ → AllWalks G
-  eachExtend : ∀ i : ℕ, i>0 → isEarOf' (specifyWalk G (ears i)) (i-1) ears
+  eachExtend : ∀ i : ℕ, i>0 → isEarOf' (specifyWalk (ears i)) (i-1) ears
+
+structure SimpleGraph.EarDecomp (G : SimpleGraph V) extends G.partialEarDecomp where
+  allVertices : ∀ v : V, ∃ i : ℕ, v∈(specifyWalk (ears i)).support
+  allEdges : ∀ e ∈ G.edgeSet, ∃! i : ℕ, e ∈ (specifyWalk (ears i)).edges
