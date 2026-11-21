@@ -35,8 +35,8 @@ def isEarOf {u v} {G : SimpleGraph V} (w : G.Walk u v) (H : G.Subgraph) : Prop :
   ∧ ∀ x ∈ w.support, x=u ∨ x=v ∨ x ∉ H.verts
   ∧ ∀ e ∈ w.edges, e∉ H.edgeSet
 
-inductive partialEarDecomp (G : SimpleGraph V): Type where
-  | init {u} (w : G.Walk u u) : w.IsCircuit -> partialEarDecomp G
+inductive partialEarDecomp (G : SimpleGraph V) : Type where
+  | init {u} (w : G.Walk u u) : w.IsCycle -> partialEarDecomp G
   | extend (u v : V) (w : G.Walk u v) (d : partialEarDecomp G) : partialEarDecomp G
 
 def partialEarDecomp.toSubgraph {G : SimpleGraph V} (d : partialEarDecomp G) : G.Subgraph :=
@@ -51,9 +51,41 @@ def isEarOf' {u v} (w : G.Walk u v) (d : partialEarDecomp G) : Prop :=
 def isEarDecomp (G : SimpleGraph V) (d : partialEarDecomp G) : Prop :=
   G.toSubgraph G (le_rfl) = d.toSubgraph
 
+lemma partialEarDecomp.two_edge_reachable {G : SimpleGraph V} (d : partialEarDecomp G)
+    {x y} (hx : x ∈ d.toSubgraph.verts) (hy : y ∈ d.toSubgraph.verts)
+    : G.IsEdgeReachable 2 x y := by
+  induction d with
+  | init c hc =>
+      change x ∈ c.toSubgraph.verts at hx
+      change y ∈ c.toSubgraph.verts at hy
+      rw[c.mem_verts_toSubgraph] at hx hy
+      have hcTrail : c.IsTrail := hc.isTrail
+      apply hcTrail.isEdgeReachable_two hx hy
+  | extend u v w d ih =>
+      change x ∈ (w.toSubgraph ⊔ d.toSubgraph).verts at hx
+      change y ∈ (w.toSubgraph ⊔ d.toSubgraph).verts at hy
+      simp only [SimpleGraph.Subgraph.verts_sup, SimpleGraph.Walk.verts_toSubgraph, Set.mem_union,
+        Set.mem_ofPred_eq] at hx hy
+      rcases hx with hxw | hxd
+      · rcases hy with hyw | hyd
+        · sorry
+        · sorry
+      · rcases hy with hyw | hyd
+        · sorry
+        · exact ih hxd hyd
+
+
 theorem edge_conn_two_iff_exists_ear_decomp (G : SimpleGraph V) :
     G.IsEdgeConnected 2 ↔ ∃ d : partialEarDecomp G, isEarDecomp G d := by
   constructor
   · sorry
-  · -- Proof by induction that subgraph of a partialEarDecomp is 2-edge-conn
-    sorry
+  · intro h
+    rcases h with ⟨d, h⟩
+    intro x y
+    apply d.two_edge_reachable
+    · unfold isEarDecomp at h
+      rw[<-h]
+      simp
+    · unfold isEarDecomp at h
+      rw[<-h]
+      simp
