@@ -16,7 +16,7 @@ Since the graph is finite, the ear decomposition must be finite, so
 we represent it with an inductive type.
 !-/
 
-variable {V : Type} [Fintype V]
+variable {V : Type}
 variable (G : SimpleGraph V)
 
 def AllWalks {V : Type u} (G : SimpleGraph V) : Type _ :=
@@ -44,14 +44,14 @@ inductive partialEarDecomp (G : SimpleGraph V) : G.Subgraph → Type where
       partialEarDecomp G (w.toSubgraph ⊔ H)
 
 -- isEarOf with a partialEarDecomp
-def isEarOf' {Hd u v} (w : G.Walk u v)  (d : partialEarDecomp G Hd) : Prop :=
+def isEarOf' {Hd u v} (w : G.Walk u v) (_ : partialEarDecomp G Hd) : Prop :=
   isEarOf w Hd
 
-def isEarDecomp (G : SimpleGraph V) {Hd : G.Subgraph} (d : partialEarDecomp G Hd) : Prop :=
+def isEarDecomp (G : SimpleGraph V) {Hd : G.Subgraph} (_ : partialEarDecomp G Hd) : Prop :=
   G.toSubgraph G (le_rfl) = Hd
 
 lemma partialEarDecomp.two_edge_reachable {G : SimpleGraph V} {Hd : G.Subgraph} (d : partialEarDecomp G Hd) :
-    ∀ (x y : V) (hx : x ∈ Hd.verts) (hy : y ∈ Hd.verts), G.IsEdgeReachable 2 x y := by
+    ∀ (x y : V) (_ : x ∈ Hd.verts) (_ : y ∈ Hd.verts), G.IsEdgeReachable 2 x y := by
   induction d with
   | init c hc =>
       intro x y hx hy
@@ -62,16 +62,24 @@ lemma partialEarDecomp.two_edge_reachable {G : SimpleGraph V} {Hd : G.Subgraph} 
       apply hcTrail.isEdgeReachable_two hx hy
   | @extend H u v w d h ih =>
       intro x y hx hy
+      rcases h with ⟨wIsTrail, uInH, vInH, _⟩
+      have huv : G.IsEdgeReachable 2 u v := ih u v uInH vInH
       change x ∈ (w.toSubgraph ⊔ H).verts at hx
       change y ∈ (w.toSubgraph ⊔ H).verts at hy
       simp only [SimpleGraph.Subgraph.verts_sup, SimpleGraph.Walk.verts_toSubgraph, Set.mem_union,
         Set.mem_ofPred_eq] at hx hy
       rcases hx with hxw | hxd
       · rcases hy with hyw | hyd
-        · sorry
-        · sorry
+        · exact wIsTrail.isEdgeReachable_two_of_isEdgeReachable_two huv hxw hyw
+        · have xuTwoReachable := wIsTrail.isEdgeReachable_two_of_isEdgeReachable_two
+            huv hxw w.start_mem_support
+          have uyTwoReachable := ih u y uInH hyd
+          exact xuTwoReachable.trans uyTwoReachable
       · rcases hy with hyw | hyd
-        · sorry
+        · have xuTwoReachable := ih x u hxd uInH
+          have uyTwoReachable := wIsTrail.isEdgeReachable_two_of_isEdgeReachable_two
+            huv w.start_mem_support hyw
+          exact xuTwoReachable.trans uyTwoReachable
         · exact ih x y hxd hyd
 
 -- Nonempty 2-connected graph has a cycle. Used to get P_0 of an ear decomp.
