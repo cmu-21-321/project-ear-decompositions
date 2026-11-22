@@ -3,6 +3,7 @@ module
 public import Mathlib.Combinatorics.SimpleGraph.Connectivity.EdgeConnectivity
 public import Mathlib.Combinatorics.SimpleGraph.Connectivity.Subgraph
 public import Mathlib.Combinatorics.SimpleGraph.Paths
+public import Mathlib.Combinatorics.SimpleGraph.Acyclic
 
 /-!
 
@@ -35,35 +36,34 @@ def isEarOf {u v} {G : SimpleGraph V} (w : G.Walk u v) (H : G.Subgraph) : Prop :
   ∧ ∀ x ∈ w.support, x=u ∨ x=v ∨ x ∉ H.verts
   ∧ ∀ e ∈ w.edges, e∉ H.edgeSet
 
-inductive partialEarDecomp (G : SimpleGraph V) : Type where
-  | init {u} (w : G.Walk u u) : w.IsCycle -> partialEarDecomp G
-  | extend (u v : V) (w : G.Walk u v) (d : partialEarDecomp G) : partialEarDecomp G
-
-def partialEarDecomp.toSubgraph {G : SimpleGraph V} (d : partialEarDecomp G) : G.Subgraph :=
-  match d with
-  | partialEarDecomp.init cycle _ => cycle.toSubgraph
-  | partialEarDecomp.extend _ _ w d => w.toSubgraph ⊔ d.toSubgraph
+inductive partialEarDecomp (G : SimpleGraph V) : G.Subgraph → Type where
+  | init {u} (w : G.Walk u u) (hw : w.IsCycle) :
+      partialEarDecomp G w.toSubgraph
+  | extend {H : G.Subgraph} (u v : V) (w : G.Walk u v)
+      (d : partialEarDecomp G H) (h : isEarOf w H) :
+      partialEarDecomp G (w.toSubgraph ⊔ H)
 
 -- isEarOf with a partialEarDecomp
-def isEarOf' {u v} (w : G.Walk u v) (d : partialEarDecomp G) : Prop :=
-  isEarOf w d.toSubgraph
+def isEarOf' {Hd u v} (w : G.Walk u v)  (d : partialEarDecomp G Hd) : Prop :=
+  isEarOf w Hd
 
-def isEarDecomp (G : SimpleGraph V) (d : partialEarDecomp G) : Prop :=
-  G.toSubgraph G (le_rfl) = d.toSubgraph
+def isEarDecomp (G : SimpleGraph V) {Hd : G.Subgraph} (d : partialEarDecomp G Hd) : Prop :=
+  G.toSubgraph G (le_rfl) = Hd
 
-lemma partialEarDecomp.two_edge_reachable {G : SimpleGraph V} (d : partialEarDecomp G)
-    {x y} (hx : x ∈ d.toSubgraph.verts) (hy : y ∈ d.toSubgraph.verts)
-    : G.IsEdgeReachable 2 x y := by
+lemma partialEarDecomp.two_edge_reachable {G : SimpleGraph V} {Hd : G.Subgraph} (d : partialEarDecomp G Hd) :
+    ∀ (x y : V) (hx : x ∈ Hd.verts) (hy : y ∈ Hd.verts), G.IsEdgeReachable 2 x y := by
   induction d with
   | init c hc =>
+      intro x y hx hy
       change x ∈ c.toSubgraph.verts at hx
       change y ∈ c.toSubgraph.verts at hy
       rw[c.mem_verts_toSubgraph] at hx hy
       have hcTrail : c.IsTrail := hc.isTrail
       apply hcTrail.isEdgeReachable_two hx hy
-  | extend u v w d ih =>
-      change x ∈ (w.toSubgraph ⊔ d.toSubgraph).verts at hx
-      change y ∈ (w.toSubgraph ⊔ d.toSubgraph).verts at hy
+  | @extend H u v w d h ih =>
+      intro x y hx hy
+      change x ∈ (w.toSubgraph ⊔ H).verts at hx
+      change y ∈ (w.toSubgraph ⊔ H).verts at hy
       simp only [SimpleGraph.Subgraph.verts_sup, SimpleGraph.Walk.verts_toSubgraph, Set.mem_union,
         Set.mem_ofPred_eq] at hx hy
       rcases hx with hxw | hxd
@@ -72,15 +72,21 @@ lemma partialEarDecomp.two_edge_reachable {G : SimpleGraph V} (d : partialEarDec
         · sorry
       · rcases hy with hyw | hyd
         · sorry
-        · exact ih hxd hyd
+        · exact ih x y hxd hyd
 
+-- Nonempty 2-connected graph has a cycle. Used to get P_0 of an ear decomp.
+lemma nonempty_two_edge_conn_has_cycle {G : SimpleGraph V} (h : G.IsEdgeConnected 2) {e} (hE : e∈G.edgeSet) : ¬G.IsAcyclic  := by
+  intro hAcyclic
+  have hAllBridge := G.isAcyclic_iff_forall_isBridge.mp hAcyclic
+  have hNoBridge := G.isEdgeConnected_two_iff_forall_not_isBridge.mp h
+  exact (hNoBridge e) (hAllBridge hE)
 
 theorem edge_conn_two_iff_exists_ear_decomp (G : SimpleGraph V) :
-    G.IsEdgeConnected 2 ↔ ∃ d : partialEarDecomp G, isEarDecomp G d := by
+    G.IsEdgeConnected 2 ↔ ∃ (Hd : G.Subgraph) (d : partialEarDecomp G Hd) , isEarDecomp G d := by
   constructor
   · sorry
   · intro h
-    rcases h with ⟨d, h⟩
+    rcases h with ⟨Hd, d, h⟩
     intro x y
     apply d.two_edge_reachable
     · unfold isEarDecomp at h
